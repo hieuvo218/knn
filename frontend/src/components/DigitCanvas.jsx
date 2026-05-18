@@ -4,6 +4,7 @@ export default function DigitCanvas({ onPixelsChange }) {
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const debounceRef = useRef(null);
+  const hasDrawnRef = useRef(false);
 
   useEffect(() => {
     clearCanvas();
@@ -25,6 +26,7 @@ export default function DigitCanvas({ onPixelsChange }) {
     const { x, y } = getPos(event);
     ctx.beginPath();
     ctx.moveTo(x, y);
+    hasDrawnRef.current = false;
   }
 
   function move(event) {
@@ -38,13 +40,18 @@ export default function DigitCanvas({ onPixelsChange }) {
     ctx.strokeStyle = '#000000';
     ctx.lineTo(x, y);
     ctx.stroke();
+    hasDrawnRef.current = true;
     scheduleEmit();
   }
 
   function end(event) {
     if (event) event.preventDefault();
+    if (!drawing) return;
     setDrawing(false);
-    scheduleEmit();
+    if (hasDrawnRef.current) {
+      scheduleEmit();
+      hasDrawnRef.current = false;
+    }
   }
 
   function clearCanvas() {
@@ -53,6 +60,10 @@ export default function DigitCanvas({ onPixelsChange }) {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
     if (onPixelsChange) onPixelsChange(null);
   }
 
@@ -78,9 +89,11 @@ export default function DigitCanvas({ onPixelsChange }) {
   }
 
   function scheduleEmit() {
+    if (!hasDrawnRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       onPixelsChange(extractPixels());
+      debounceRef.current = null;
     }, 1000);
   }
 
