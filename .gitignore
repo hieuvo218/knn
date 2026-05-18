@@ -7,4 +7,6 @@ loss_functions.py
 test.py
 
 data/import/mnist.csv
+node_modules/
+frontend/node_modules/
 
