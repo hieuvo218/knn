@@ -29,11 +29,12 @@ export const api = {
   activateTune: ({ jobId, k, method }) =>
     request(`/tune/${jobId}/activate`, { method: 'POST', body: JSON.stringify({ k, method }) }),
   dbStats: () => request('/database/stats'),
-  dbSamples: ({ page = 0, size = 20, label = '', status = '', source = '' } = {}) => {
+  dbSamples: ({ page = 0, size = 20, id = '', status = '', source = '', order = 'latest' } = {}) => {
     const params = new URLSearchParams({ page, size });
-    if (label !== '') params.set('label', label);
+    if (id !== '') params.set('id', id);
     if (status) params.set('status', status);
     if (source) params.set('source', source);
+    if (order) params.set('order', order);
     return request(`/database/samples?${params.toString()}`);
   },
   updateSample: (id, label) => request(`/database/samples/${id}`, { method: 'PUT', body: JSON.stringify({ label }) }),

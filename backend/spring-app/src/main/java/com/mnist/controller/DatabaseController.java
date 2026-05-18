@@ -47,9 +47,10 @@ public class DatabaseController {
 
     @GetMapping("/samples")
     public Map<String, Object> samples(
-            @RequestParam(required = false) Integer label,
+            @RequestParam(required = false) Long id,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String source,
+            @RequestParam(defaultValue = "latest") String order,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
@@ -57,20 +58,42 @@ public class DatabaseController {
         size = Math.min(Math.max(1, size), 100);
         int offset = page * size;
 
-        StringBuilder where = new StringBuilder(" WHERE deleted=FALSE ");
+        String fromClause = """
+            FROM (
+                SELECT id, pixels, label, source, status, created_at, updated_at, 'digit' AS row_type
+                FROM digit_samples
+                WHERE deleted=FALSE
+
+                UNION ALL
+
+                SELECT id, pixels, true_label AS label, 'feedback_submission' AS source, status,
+                       created_at, COALESCE(reviewed_at, created_at) AS updated_at, 'feedback' AS row_type
+                FROM feedback_samples
+            ) merged
+        """;
+
+        StringBuilder where = new StringBuilder(" WHERE 1=1 ");
         List<Object> params = new ArrayList<>();
-        if (label != null) { where.append(" AND label=? "); params.add(label); }
+        if (id != null) { where.append(" AND id=? "); params.add(id); }
         if (status != null && !status.isBlank()) { where.append(" AND status=? "); params.add(status); }
         if (source != null && !source.isBlank()) { where.append(" AND source=? "); params.add(source); }
 
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM digit_samples" + where, Long.class, params.toArray());
+        String normalizedOrder = (order == null) ? "latest" : order.trim().toLowerCase(Locale.ROOT);
+        String orderBy = switch (normalizedOrder) {
+            case "oldest", "oldest_first" -> " ORDER BY created_at ASC, id ASC ";
+            case "id_asc" -> " ORDER BY id ASC ";
+            case "id_desc" -> " ORDER BY id DESC ";
+            case "newest", "latest" -> " ORDER BY created_at DESC, id DESC ";
+            default -> " ORDER BY created_at DESC, id DESC ";
+        };
+
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) " + fromClause + where, Long.class, params.toArray());
         params.add(size);
         params.add(offset);
 
         List<Map<String, Object>> rows = jdbcTemplate.query("""
-            SELECT id, pixels, label, source, status, created_at, updated_at
-            FROM digit_samples
-        """ + where + " ORDER BY id DESC LIMIT ? OFFSET ?", (rs, rowNum) -> {
+            SELECT id, pixels, label, source, status, created_at, updated_at, row_type
+            """ + fromClause + where + orderBy + " LIMIT ? OFFSET ?", (rs, rowNum) -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", rs.getLong("id"));
             m.put("pixels", arrayToList(rs.getArray("pixels")));
@@ -79,6 +102,7 @@ public class DatabaseController {
             m.put("status", rs.getString("status"));
             m.put("createdAt", rs.getTimestamp("created_at").toInstant().toString());
             m.put("updatedAt", rs.getTimestamp("updated_at").toInstant().toString());
+            m.put("rowType", rs.getString("row_type"));
             return m;
         }, params.toArray());
 

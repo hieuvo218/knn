@@ -5,22 +5,20 @@ import DigitPreview from '../components/DigitPreview.jsx';
 export default function Database() {
   const [stats, setStats] = useState(null);
   const [samples, setSamples] = useState(null);
-  const [feedbackRows, setFeedbackRows] = useState([]);
-  const [feedbackStatus, setFeedbackStatus] = useState('pending');
-  const [label, setLabel] = useState('');
+  const [idFilter, setIdFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [orderBy, setOrderBy] = useState('latest');
   const [page, setPage] = useState(0);
   const [message, setMessage] = useState('');
 
   async function load(nextPage = page) {
-    const [s, rows, feedback] = await Promise.all([
+    const [s, rows] = await Promise.all([
       api.dbStats(),
-      api.dbSamples({ page: nextPage, size: 20, label, status: statusFilter }),
-      api.listFeedback(feedbackStatus),
+      api.dbSamples({ page: nextPage, size: 20, id: idFilter, status: statusFilter, source: sourceFilter, order: orderBy }),
     ]);
     setStats(s);
     setSamples(rows);
-    setFeedbackRows(feedback);
     setPage(nextPage);
   }
 
@@ -68,17 +66,30 @@ export default function Database() {
       <section className="card">
         <h2>Query Samples</h2>
         <div className="form-row">
-          <label>Label</label>
-          <select value={label} onChange={e => setLabel(e.target.value)}>
-            <option value="">All</option>
-            {[0,1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <label>ID</label>
+          <input type="number" value={idFilter} onChange={e => setIdFilter(e.target.value)} placeholder="e.g. 12" />
           <label>Status</label>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="">all</option>
             <option value="accepted">accepted</option>
             <option value="pending">pending</option>
             <option value="rejected">rejected</option>
+          </select>
+          <label>Source</label>
+          <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
             <option value="">all</option>
+            <option value="mnist_npz">mnist_npz</option>
+            <option value="mnist_csv">mnist_csv</option>
+            <option value="feedback">feedback</option>
+            <option value="feedback_submission">feedback_submission</option>
+          </select>
+          <label>Order</label>
+          <select value={orderBy} onChange={e => setOrderBy(e.target.value)}>
+            <option value="latest">latest</option>
+            <option value="newest">newest</option>
+            <option value="oldest">oldest</option>
+            <option value="id_desc">id desc</option>
+            <option value="id_asc">id asc</option>
           </select>
           <button onClick={search}>Search</button>
         </div>
@@ -91,9 +102,9 @@ export default function Database() {
                 <DigitPreview pixels={row.pixels} size={84} />
                 <p>ID #{row.id}</p>
                 <p>Label: {row.label}</p>
-                <p>{row.source} · {row.status}</p>
-                <button onClick={() => updateLabel(row.id)}>Edit label</button>
-                <button className="danger" onClick={() => deleteSample(row.id)}>Delete</button>
+                <p>{row.source} · {row.status} · {row.rowType}</p>
+                {row.rowType === 'digit' && <button onClick={() => updateLabel(row.id)}>Edit label</button>}
+                {row.rowType === 'digit' && <button className="danger" onClick={() => deleteSample(row.id)}>Delete</button>}
               </div>
             ))}
           </div>
@@ -103,35 +114,6 @@ export default function Database() {
           <span>Page {page}</span>
           <button disabled={!samples || (page + 1) * samples.size >= samples.total} onClick={() => load(page + 1)}>Next</button>
         </div>
-      </section>
-
-      <section className="card">
-        <h2>Feedback Submissions</h2>
-        <div className="form-row">
-          <label>Status</label>
-          <select value={feedbackStatus} onChange={e => setFeedbackStatus(e.target.value)}>
-            <option value="pending">pending</option>
-            <option value="rejected">rejected</option>
-            <option value="accepted">accepted</option>
-          </select>
-          <button onClick={() => load(0)}>Load feedback</button>
-        </div>
-
-        {feedbackRows.length === 0 ? (
-          <p>No {feedbackStatus} feedback submissions.</p>
-        ) : (
-          <div className="feedback-grid">
-            {feedbackRows.map(row => (
-              <div className="feedback-card" key={row.id}>
-                <DigitPreview pixels={row.pixels} size={84} />
-                <p>ID #{row.id}</p>
-                <p>Predicted: {row.predictedLabel ?? 'N/A'}</p>
-                <p>True: {row.trueLabel ?? 'N/A'}</p>
-                <p>Status: {row.status}</p>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
       <p className="status">{message}</p>
     </div>
