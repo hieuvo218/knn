@@ -8,6 +8,7 @@ export default function Home() {
   const [prediction, setPrediction] = useState(null);
   const [trueLabel, setTrueLabel] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [status, setStatus] = useState('Draw a digit. Prediction runs 1s after you stop drawing.');
   const [loading, setLoading] = useState(false);
 
@@ -16,6 +17,7 @@ export default function Home() {
     setPrediction(null);
     setTrueLabel('');
     setConfirmed(false);
+    setFeedbackSubmitted(false);
     if (!nextPixels) {
       setStatus('Canvas cleared.');
       return;
@@ -49,6 +51,7 @@ export default function Home() {
         trueLabel: Number(trueLabel),
       });
       setStatus(`Feedback submitted as pending. Feedback id: ${res.feedbackId}`);
+      setFeedbackSubmitted(true);
     } catch (err) {
       setStatus(`Feedback failed: ${err.message}`);
     }
@@ -86,10 +89,17 @@ export default function Home() {
             <p>Dataset v{prediction.datasetVersion}, samples {prediction.sampleCount}</p>
 
             <div className="actions">
-              <button onClick={confirmCorrect} disabled={confirmed}>{confirmed ? 'Marked as correct' : 'Prediction is correct'}</button>
+              {!confirmed && !feedbackSubmitted && (
+                <button onClick={confirmCorrect}>Prediction is correct</button>
+              )}
+              {(confirmed || feedbackSubmitted) && (
+                <button disabled>
+                  {confirmed ? 'Marked as correct' : 'Feedback submitted'}
+                </button>
+              )}
             </div>
 
-            {!confirmed && (
+            {!(confirmed || feedbackSubmitted) && (
               <div className="feedback-box">
                 <label>Wrong? Choose true label:</label>
                 <select value={trueLabel} onChange={(e) => setTrueLabel(e.target.value)}>
