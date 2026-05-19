@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Dict, Tuple
@@ -11,6 +13,9 @@ from db import current_dataset_version, fetch_accepted_samples
 CACHE_DIR = Path(os.getenv("MNIST_CACHE_DIR", "/app/data/cache"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 ACTIVE_PATH = CACHE_DIR / "active_cache.json"
+IMPORT_NPZ = Path(os.getenv("MNIST_IMPORT_NPZ", "/app/data/import/mnist.npz"))
+IMPORT_CSV = Path(os.getenv("MNIST_IMPORT_CSV", "/app/data/import/mnist.csv"))
+IMPORT_SCRIPT = Path(__file__).resolve().parent / "scripts" / "import_local_mnist.py"
 
 _lock = threading.Lock()
 _loaded = {
@@ -43,10 +48,53 @@ def _write_active(version: int, path: Path, sample_count: int):
     }, indent=2), encoding="utf-8")
 
 
+def _resolve_import_paths() -> tuple[Path, Path]:
+    if IMPORT_NPZ.exists() or IMPORT_CSV.exists():
+        return IMPORT_NPZ, IMPORT_CSV
+
+    repo_root = Path(__file__).resolve().parents[2]
+    fallback_dir = repo_root / "data" / "import"
+    fallback_npz = fallback_dir / "mnist.npz"
+    fallback_csv = fallback_dir / "mnist.csv"
+    return fallback_npz, fallback_csv
+
+
+def _seed_local_mnist() -> bool:
+    if not IMPORT_SCRIPT.exists():
+        return False
+    npz_path, csv_path = _resolve_import_paths()
+    if not npz_path.exists() and not csv_path.exists():
+        return False
+
+    command = [
+        sys.executable,
+        str(IMPORT_SCRIPT),
+        "--npz",
+        str(npz_path),
+        "--csv",
+        str(csv_path),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or "").strip()
+        message = details if details else "Unknown error"
+        raise RuntimeError(f"Local MNIST import failed: {message}") from exc
+    return True
+
+
 def rebuild_cache(version: int) -> Path:
     rows = fetch_accepted_samples()
     if not rows:
-        raise RuntimeError("No accepted samples found in database. Run the MNIST importer first.")
+        seeded = _seed_local_mnist()
+        if seeded:
+            version = current_dataset_version()
+            rows = fetch_accepted_samples()
+    if not rows:
+        raise RuntimeError(
+            "No accepted samples found in database. "
+            "Add MNIST data to /app/data/import or run the MNIST importer."
+        )
 
     ids = np.array([int(row["id"]) for row in rows], dtype=np.int64)
     X = np.array([row["pixels"] for row in rows], dtype=np.uint8)

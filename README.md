@@ -11,7 +11,7 @@ Tech stack:
 - DevOps: Docker Compose
 
 ## Start fresh
-Open 3 terminal
+Open 2 terminal
 
 at terminal 1, run
 
@@ -23,15 +23,16 @@ docker compose up --build
 at terminal 2, run
 
 ```bash
-docker compose --profile import run --rm mnist-importer
-```
-
-at terminal 3, run
-
-```bash
 cd frontend
 npm install
 npm run dev
+```
+
+The ML service will auto-import `data/import/mnist.npz` on first prediction if the database is empty.
+To force a re-import, run:
+
+```bash
+docker compose --profile import run --rm mnist-importer
 ```
 
 ---
