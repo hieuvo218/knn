@@ -2,6 +2,38 @@
 
 A KNN classifier supporting two index backends: **KD-Tree** (exact) and **LSH** (approximate). Designed for high-dimensional datasets like MNIST.
 
+
+Tech stack:
+- Frontend: React + Vite
+- Backend: Spring Boot Java 17
+- ML: Python + Flask + scikit-learn kNN
+- Database: PostgreSQL 15
+- DevOps: Docker Compose
+
+## Start fresh
+Open 3 terminal
+
+at terminal 1, run
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+at terminal 2, run
+
+```bash
+docker compose --profile import run --rm mnist-importer
+```
+
+at terminal 3, run
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
 ---
 
 ## Index Backends

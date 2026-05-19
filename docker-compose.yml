@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: mnist-db
+    environment:
+      POSTGRES_DB: mnist_database
+      POSTGRES_USER: mnist_user
+      POSTGRES_PASSWORD: mnist_password
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mnist_user -d mnist_database"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ml-service:
+    build:
+      context: ./backend/ml-service
+    container_name: ml-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: mnist_database
+      DB_USER: mnist_user
+      DB_PASSWORD: mnist_password
+      MNIST_CACHE_DIR: /app/data/cache
+      FLASK_PORT: 5000
+    ports:
+      - "${ML_SERVICE_PORT:-5000}:5000"
+    volumes:
+      - ./data/cache:/app/data/cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mnist-importer:
+    profiles: ["import"]
+    build:
+      context: ./backend/ml-service
+    container_name: mnist-importer
+    command:
+      [
+        "python",
+        "scripts/import_local_mnist.py",
+        "--npz",
+        "/app/data/import/mnist.npz",
+        "--csv",
+        "/app/data/import/mnist.csv"
+      ]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: mnist_database
+      DB_USER: mnist_user
+      DB_PASSWORD: mnist_password
+    volumes:
+      - ./data/import:/app/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  spring-boot:
+    build:
+      context: ./backend/spring-app
+    container_name: mnist-api
+    environment:
+      SPRING_BOOT_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: mnist_database
+      DB_USER: mnist_user
+      DB_PASSWORD: mnist_password
+      ML_SERVICE_URL: http://ml-service:5000
+    ports:
+      - "${SPRING_BOOT_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
+
+
+volumes:
+  postgres_data:
