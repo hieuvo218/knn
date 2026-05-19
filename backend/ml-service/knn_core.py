@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import time
 import uuid
 from dataclasses import dataclass
 from typing import Dict, List
 
 import numpy as np
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 
 @dataclass
@@ -341,6 +343,8 @@ def balanced_indices(y: np.ndarray, total: int, seed: int = 42) -> np.ndarray:
 
 
 def tune_knn(version: int, X_uint8: np.ndarray, y: np.ndarray, sample_count: int, method: str, k_values: List[int]):
+    # Currently only tunes k (n_neighbors). LSH has additional parameters (n_planes, n_tables)
+    # and kd-tree has leaf_size that could be tuned for better performance optimization.
     method = "lsh" if method == "lsh" else "kd_tree"
     sample_count = int(sample_count or 500)
     sample_count = max(20, min(sample_count, len(y)))
@@ -365,8 +369,10 @@ def tune_knn(version: int, X_uint8: np.ndarray, y: np.ndarray, sample_count: int
     for k in sorted(set(int(v) for v in k_values if int(v) > 0)):
         k_eff = min(k, len(y_train))
         if method == "lsh":
+            # LSH parameters n_planes=10, n_tables=5 are hardcoded; consider as tuning candidates for future work
             model = LSHIndexClassifier(n_neighbors=k_eff).fit(X_train, y_train)
         else:
+            # KdTree leaf_size=30 is hardcoded; could be tuned for different dataset sizes
             model = ExactVectorKNN(n_neighbors=k_eff).fit(X_train, y_train)
 
         start = time.perf_counter()
@@ -375,11 +381,15 @@ def tune_knn(version: int, X_uint8: np.ndarray, y: np.ndarray, sample_count: int
         avg_latency = total_latency / max(1, len(y_val))
         acc = float(accuracy_score(y_val, preds))
         f1 = float(f1_score(y_val, preds, average="macro", zero_division=0))
+        precision = float(precision_score(y_val, preds, average="macro", zero_division=0))
+        recall = float(recall_score(y_val, preds, average="macro", zero_division=0))
         results.append({
             "k": int(k),
             "method": method,
             "accuracy": acc,
             "f1Score": f1,
+            "precision": precision,
+            "recall": recall,
             "avgLatencyMs": float(avg_latency),
             "trainingSamples": int(len(y_train)),
             "evaluatedSamples": int(len(y_val)),

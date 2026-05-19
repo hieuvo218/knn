@@ -102,17 +102,21 @@ export default function Model() {
             <label>View metric:</label>
             <select value={tuneMetric} onChange={e => setTuneMetric(e.target.value)}>
               <option value="accuracy">Accuracy</option>
+              <option value="precision">Precision</option>
+              <option value="recall">Recall</option>
               <option value="f1Score">F1</option>
               <option value="avgLatencyMs">Latency (ms)</option>
             </select>
           </div>
           <table>
-            <thead><tr><th>Rank</th><th>k</th><th>Method</th><th>Accuracy</th><th>F1</th><th>Latency</th><th>Train</th><th>Eval</th><th>Action</th></tr></thead>
+            <thead><tr><th>Rank</th><th>k</th><th>Method</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>Latency</th><th>Train</th><th>Eval</th><th>Action</th></tr></thead>
             <tbody>
               {tuneResult.topResults.map(row => (
                 <tr key={`${row.k}-${row.method}`}>
                   <td>{row.rank}</td><td>{row.k}</td><td>{row.method}</td>
                   <td>{(row.accuracy * 100).toFixed(2)}%</td>
+                  <td>{(row.precision * 100).toFixed(2)}%</td>
+                  <td>{(row.recall * 100).toFixed(2)}%</td>
                   <td>{row.f1Score.toFixed(3)}</td>
                   <td>{row.avgLatencyMs.toFixed(2)} ms</td>
                   <td>{row.trainingSamples}</td>
@@ -219,7 +223,14 @@ function TuneChart({ results, metric }) {
         {[0,0.25,0.5,0.75,1].map((g,i) => {
           const v = vmin + (1 - g) * yrange;
           const y = pad + g * (height - pad * 2);
-          const label = metric === 'avgLatencyMs' ? `${v.toFixed(1)} ms` : (metric === 'accuracy' || metric === 'f1Score' ? `${(v*100).toFixed(1)}%` : v.toFixed(3));
+          let label;
+          if (metric === 'avgLatencyMs') {
+            label = `${v.toFixed(1)} ms`;
+          } else if (['accuracy', 'precision', 'recall', 'f1Score'].includes(metric)) {
+            label = `${(v * 100).toFixed(1)}%`;
+          } else {
+            label = v.toFixed(3);
+          }
           return <text key={i} x={6} y={y+4} fontSize={10}>{label}</text>;
         })}
       </svg>
